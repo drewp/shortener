@@ -14,24 +14,35 @@ class index(object):
         web.header("content-type", "application/json")
         return render.index()
 
+def newShort():
+    for tries in range(500):
+        size = 3 + tries / 50
+        s = ''.join(random.choice(alphabet) for i in range(size))
+        if not uris.find_one({"short" : s}):
+            return s
+    raise ValueError("failed to find a new short URI code")
+
 class shortLink(object):
     def GET(self):
         longUri = web.input()['long']
-        # still full of races, but they mostly end up with multiple
-        # shorts for one long, which isn't bad
+        # still full of races, including multiple shorts for one long
+        # (ok) and multiple longs getting one short (bad)
         match = uris.find_one({"long" : longUri})
         if not match:
-            for tries in range(500):
-                size = 3 + tries / 50
-                newShort = ''.join(random.choice(alphabet) for i in range(size))
-                if not uris.find_one({"short" : newShort}):
-                    break
-
-            match = {"long" : longUri, "short" : newShort}
+            match = {"long" : longUri, "short" : newShort()}
             uris.insert(match)
             
         del match['_id']
 
+        web.header("content-type", "application/json")
+        return json.dumps(match)
+
+class shortLinkTest(object):
+    def GET(self):
+        match = uris.find_one({"long" : web.input()['long']})
+        if not match:
+            raise web.NotFound()
+        del match['_id']
         web.header("content-type", "application/json")
         return json.dumps(match)
 
@@ -47,6 +58,7 @@ class follow(object):
 
 app = web.application((r"/", "index",
                        r"/shortLink", "shortLink",
+                       r"/shortLinkTest", "shortLinkTest",
                        r"/follow/(.*)", "follow",
                        ), globals())
 if __name__ == '__main__':
